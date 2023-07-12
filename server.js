@@ -61,19 +61,7 @@ const updateQueryWithParam = (query, ...params) => {
 
 // Add optional API key if set in config file
 app.use(function (req, res, next) {
-  if (
-    CONFIG.CLIMATE_TOKENIZATION_ENGINE_API_KEY &&
-    CONFIG.CLIMATE_TOKENIZATION_ENGINE_API_KEY !== ""
-  ) {
-    const apikey = req.header("x-api-key");
-    if (CONFIG.CLIMATE_TOKENIZATION_ENGINE_API_KEY === apikey) {
-      next();
-    } else {
-      res.status(403).json({ message: "API key not found" });
-    }
-  } else {
-    next();
-  }
+  next();
 });
 
 app.post("/connect", validator.body(connectToOrgSchema), async (req, res) => {
@@ -122,21 +110,23 @@ app.use(
     secure: false,
     pathRewrite: async function (path, req) {
       const currentUrl = new URL(`${CONFIG.CADT_API_SERVER_HOST}${path}`);
+      console.log("currentUrl", currentUrl);
 
+      logger.info(currentUrl);
       const newQuery = updateQueryWithParam(
         currentUrl.search,
         {
           param: "hasMarketplaceIdentifier",
           value: true,
-        },
-        {
-          param: "orgUid",
-          value: CONFIG.HOME_ORG,
-        },
-        {
-          param: "includeProjectInfoInSearch",
-          value: true,
         }
+        // {
+        //   param: "orgUid",
+        //   value: CONFIG.HOME_ORG,
+        // },
+        // {
+        //   param: "includeProjectInfoInSearch",
+        //   value: true,
+        // }
       );
 
       const newPath = "/v1/units" + newQuery;
@@ -201,19 +191,19 @@ app.use(
         {
           param: "hasMarketplaceIdentifier",
           value: false,
-        },
-        {
-          param: "orgUid",
-          value: CONFIG.HOME_ORG,
-        },
-        {
-          param: "includeProjectInfoInSearch",
-          value: true,
-        },
-        {
-          param: "filter",
-          value: CONFIG.UNITS_FILTER,
         }
+        // {
+        //   param: "orgUid",
+        //   value: CONFIG.HOME_ORG,
+        // },
+        // {
+        //   param: "includeProjectInfoInSearch",
+        //   value: true,
+        // },
+        // {
+        //   param: "filter",
+        //   value: CONFIG.UNITS_FILTER,
+        // }
       );
 
       const newPath = "/v1/units" + newQuery;
