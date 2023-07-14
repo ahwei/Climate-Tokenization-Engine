@@ -110,7 +110,6 @@ app.use(
     secure: false,
     pathRewrite: async function (path, req) {
       const currentUrl = new URL(`${CONFIG.CADT_API_SERVER_HOST}${path}`);
-      console.log("currentUrl", currentUrl);
 
       logger.info(currentUrl);
       const newQuery = updateQueryWithParam(
@@ -227,6 +226,7 @@ const updateUnitMarketplaceIdentifierWithAssetId = async (
   warehouseUnitId,
   asset_id
 ) => {
+  console.log("updateUnitMarketplaceIdentifierWithAssetId");
   try {
     const unitToBeUpdatedResponse = await superagent
       .get(`${CONFIG.CADT_API_SERVER_HOST}/v1/units`)
@@ -234,6 +234,7 @@ const updateUnitMarketplaceIdentifierWithAssetId = async (
       .set(addCadtApiKeyHeader());
 
     const unitToBeUpdated = unitToBeUpdatedResponse.body;
+
     unitToBeUpdated.marketplaceIdentifier = asset_id;
 
     delete unitToBeUpdated?.issuance?.orgUid;
@@ -253,7 +254,7 @@ const updateUnitMarketplaceIdentifierWithAssetId = async (
       .set(headers);
 
     const data = updateUnitResponse.body;
-
+    console.log("updateUnitResponse", data);
     await superagent
       .post(`${CONFIG.CADT_API_SERVER_HOST}/v1/staging/commit`)
       .set(headers);
@@ -308,20 +309,22 @@ const registerTokenCreationOnClimateWarehouse = async (
   token,
   warehouseUnitId
 ) => {
+  console.log("start registerTokenCreationOnClimateWarehouse");
   try {
     const response = await superagent
       .post(`${CONFIG.CADT_API_SERVER_HOST}/v1/organizations/metadata`)
       .send({ [token.asset_id]: JSON.stringify(token) })
-      .set(addCadtApiKeyHeader({ "Content-Type": "application/json" }));
+      .set(addCadtApiKeyHeader({ "Content-Type": "application/json" }))
+      .catch((e) => console.log(e));
 
     const data = response.body;
-
+    console.log("metadata", data);
     if (
       data.message ===
       "Home org currently being updated, will be completed soon."
     ) {
       const isTokenRegistered = await confirmTokenRegistrationOnWarehouse();
-
+      console.log("isTokenRegistered", isTokenRegistered);
       if (isTokenRegistered && CONFIG.UPDATE_CLIMATE_WAREHOUSE) {
         await updateUnitMarketplaceIdentifierWithAssetId(
           warehouseUnitId,
@@ -332,6 +335,9 @@ const registerTokenCreationOnClimateWarehouse = async (
       logger.error("Could not register token creation on climate warehouse.");
     }
   } catch (error) {
+    console.error(
+      `Could not register token creation on climate warehouse: ${error}`
+    );
     logger.error(
       `Could not register token creation on climate warehouse: ${error.message}`
     );
@@ -345,7 +351,7 @@ const confirmTokenCreationWithTransactionId = async (
 ) => {
   if (retry <= 60) {
     try {
-      await new Promise((resolve) => setTimeout(() => resolve(), 30000));
+      await new Promise((resolve) => setTimeout(() => resolve(), 10 * 1000));
 
       const response = await superagent.get(
         `${CONFIG.CLIMATE_TOKENIZATION_CHIA_HOST}/v1/transactions/${transactionId}`
@@ -357,7 +363,7 @@ const confirmTokenCreationWithTransactionId = async (
       if (isTokenCreationConfirmed) {
         return true;
       } else {
-        await new Promise((resolve) => setTimeout(() => resolve(), 30000));
+        await new Promise((resolve) => setTimeout(() => resolve(), 10 * 1000));
         return confirmTokenCreationWithTransactionId(
           token,
           transactionId,
@@ -393,20 +399,25 @@ app.post("/tokenize", validator.body(tokenizeUnitSchema), async (req, res) => {
       .set({ "Content-Type": "application/json" });
 
     const data = response.body;
+    console.log("tokenize response", data);
     const isTokenCreationPending = Boolean(data?.tx?.id);
-
+    console.log("isTokenCreationPending", isTokenCreationPending);
     if (isTokenCreationPending) {
-      res.send(
-        "Your token is being created and should be ready in a few minutes."
-      );
-
+      //排成確認
       const isTokenCreationConfirmed =
         await confirmTokenCreationWithTransactionId(data.token, data.tx.id);
 
+      console.log("isTokenCreationConfirmed", isTokenCreationConfirmed);
+
       if (isTokenCreationConfirmed) {
+        //token登入climate warehouse
         await registerTokenCreationOnClimateWarehouse(
           data.token,
           req.body.warehouseUnitId
+        );
+
+        res.send(
+          "Your token is being created and should be ready in a few minutes."
         );
       } else {
         console.log("Token creation could not be confirmed.");
@@ -505,11 +516,14 @@ app.post("/parse-detok-file", async (req, res) => {
     const unitToBeDetokenizedResponse = await getTokenizedUnitByAssetId(
       assetId
     );
-    let unitToBeDetokenized = JSON.parse(unitToBeDetokenizedResponse);
+
+    console.log("assetId", assetId);
+
+    let unitToBeDetokenized = unitToBeDetokenizedResponse;
     if (unitToBeDetokenized.length) {
       unitToBeDetokenized = unitToBeDetokenized[0];
     }
-
+    console.log("unitToBeDetokenized", unitToBeDetokenized);
     if (parseDetokResponse?.payment?.amount) {
       unitToBeDetokenized.unitCount = parseDetokResponse?.payment?.amount;
     }
@@ -522,6 +536,7 @@ app.post("/parse-detok-file", async (req, res) => {
 
     const orgMetaData = await getOrgMetaData(orgUid);
     const assetIdOrgMetaData = orgMetaData[`meta_${assetId}`];
+    console.log("assetIdOrgMetaData", assetIdOrgMetaData);
     const parsedAssetIdOrgMetaData = JSON.parse(assetIdOrgMetaData);
 
     const responseObject = {
@@ -538,6 +553,8 @@ app.post("/parse-detok-file", async (req, res) => {
       content: detokString,
       unit: unitToBeDetokenized,
     };
+
+    console.log("responseObject", responseObject);
 
     res.send(responseObject);
   } catch (error) {
