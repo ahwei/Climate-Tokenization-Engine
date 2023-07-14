@@ -567,29 +567,28 @@ app.post("/parse-detok-file", async (req, res) => {
 });
 
 app.post("/confirm-detokanization", async (req, res) => {
-  try {
-    const confirmDetokanizationBody = _.cloneDeep(req.body);
-
-    const assetId = confirmDetokanizationBody?.token?.asset_id;
-    if (confirmDetokanizationBody.unit) {
-      delete confirmDetokanizationBody.unit;
-    }
-
-    const confirmDetokanizationResponse = await request({
-      method: "put",
-      url: `${CONFIG.CLIMATE_TOKENIZATION_CHIA_HOST}/v1/tokens/${assetId}/detokenize`,
-      body: JSON.stringify(confirmDetokanizationBody),
-      headers: { "Content-Type": "application/json" },
-    });
-
-    res.send(confirmDetokanizationResponse);
-  } catch (error) {
-    res.status(400).json({
-      message: "Detokanization could not be confirmed",
-      error: error.message,
-    });
-    logger.error(`Detokanization could not be confirmed: ${error.message}`);
+  const confirmDetokanizationBody = _.cloneDeep(req.body);
+  console.log("confirmDetokanizationBody", confirmDetokanizationBody);
+  const assetId = confirmDetokanizationBody?.token?.asset_id;
+  if (confirmDetokanizationBody.unit) {
+    delete confirmDetokanizationBody.unit;
   }
+
+  // const confirmDetokanizationResponse = await request({
+  //   method: "put",
+  //   url: `${CONFIG.CLIMATE_TOKENIZATION_CHIA_HOST}/v1/tokens/${assetId}/detokenize`,
+  //   body: JSON.stringify(confirmDetokanizationBody),
+  //   headers: { "Content-Type": "application/json" },
+  // });
+
+  const confirmDetokanizationResponse = await superagent
+    .put(
+      `${CONFIG.CLIMATE_TOKENIZATION_CHIA_HOST}/v1/tokens/${assetId}/detokenize`
+    )
+    .send(confirmDetokanizationBody)
+    .set("Content-Type", "application/json");
+
+  res.send(confirmDetokanizationResponse);
 });
 
 app.use((err, req, res, next) => {
